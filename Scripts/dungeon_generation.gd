@@ -37,11 +37,14 @@ func set_border_size(val:int)->void:
 func set_seed(val:String)->void:
 	custom_seed = val
 	seed(val.hash())
-	
 
 @export var room_tiles : Array[PackedVector3Array] = []
 @export var room_positions : PackedVector3Array = []
 @export var spawned_centers : Array = []
+
+func _ready() -> void:
+	generate("1")
+
 
 # Визуализированные границы пространства
 func visualize_border():
@@ -59,15 +62,15 @@ func visualize_centers():
 		new_marker.position = pos
 		spawned_centers.append(new_marker)
 		add_child(new_marker)
-		print("Добавлен объект на позиции: ", pos)
+		#print("Добавлен объект на позиции: ", pos)
 	centers_visible = true
+	print("Добавлено позиций: ", spawned_centers.size())
 
 func clear_centers():
 	for center in spawned_centers:
 		if center != null and is_instance_valid(center):
 			if center is Node:
 				center.free()
-				print("Удален объект: ", center)
 	spawned_centers.clear()
 	centers_visible = false
 	print("Все объекты удалены. Осталось: ", spawned_centers.size())
@@ -79,12 +82,17 @@ func dungeon_layout_clear():
 	room_positions.clear()
 
 # Основная функция генерации комнат
-func generate():
+func generate(seed: String = ""):
 	dungeon_layout_clear()
 	print("generating...")
 	
-	if custom_seed :
+	if seed:
+		set_seed(seed)
+	elif custom_seed:
 		set_seed(custom_seed)
+	
+	print("custom seed: " + custom_seed)
+	print("seed in func: " + seed)
 	
 	#создание комнат
 	visualize_border()

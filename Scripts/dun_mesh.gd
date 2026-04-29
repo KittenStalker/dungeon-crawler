@@ -12,7 +12,10 @@ extends Node3D
 	if Engine.is_editor_hint():
 			clear_mesh()
 
-var dun_cell_scene : PackedScene = preload("res://Asset/tiles_new.tscn")
+@export_range(1,10) var step : int = 10
+@export_range(0,1	) var intervallo : float = 0
+
+var dun_cell_scene : PackedScene = preload("res://Asset/dun_mesh.tscn")
 
 var directions : Dictionary = {
 	"up" : Vector3i.FORWARD,
@@ -63,10 +66,10 @@ func create_dungeon():
 		var cell_index : int = grid_map.get_cell_item(cell)
 		if cell_index <=2 && cell_index >=0:
 			var dun_cell : Node3D = dun_cell_scene.instantiate()
-			dun_cell.position = Vector3(cell) #+ Vector3(0.5,0,0.5)
+			dun_cell.position = Vector3(cell)
 			add_child(dun_cell)
 			t += 1
-			for i in 4:
+			for i in 4:   #определение стороны для двери
 				var cell_n : Vector3i = cell + directions.values()[i]
 				var cell_n_index : int = grid_map.get_cell_item(cell_n)
 				if cell_n_index == -1 || cell_n_index == 3:
@@ -74,5 +77,5 @@ func create_dungeon():
 				else:
 					var key : String = str(cell_index) + str(cell_n_index)
 					call("handle_" + key, dun_cell, directions.keys()[i])
-		if t%10 == 9 : await get_tree().create_timer(0).timeout
+		if t%step == step-1 : await get_tree().create_timer(intervallo).timeout
 	print("Done")
