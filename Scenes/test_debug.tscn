@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://c5ambei6357br"]
 
-[ext_resource type="MeshLibrary" uid="uid://dsvorr8peln6" path="res://Asset/dun_mesh.tres" id="1_ee8ya"]
+[ext_resource type="MeshLibrary" uid="uid://dsvorr8peln6" path="res://Asset/Files/dun_mesh.tres" id="1_ee8ya"]
 [ext_resource type="PackedScene" uid="uid://droax4m0k35mg" path="res://Asset/player.tscn" id="2_467uv"]
 
 [node name="TestDebug" type="Node3D" unique_id=1514073731]

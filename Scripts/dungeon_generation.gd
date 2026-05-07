@@ -1,7 +1,8 @@
 @tool 
 extends Node3D
 @onready var grid_map: GridMap = $GridMap
-var marker = preload("res://Asset/node_3d.tscn")
+
+var spawned_count : int = 0
 var centers_visible : bool = false
 
 @export_tool_button("Generate") var generate_dungeon: Callable = func():
@@ -42,9 +43,40 @@ func set_seed(val:String)->void:
 @export var room_positions : PackedVector3Array = []
 @export var spawned_centers : Array = []
 
-func _ready() -> void:
-	generate("1")
+const marker = preload("res://Asset/node_3d.tscn") #center TODO rework
+#var player_resource = preload("res://Asset/player.tscn")
 
+@onready var player: CharacterBody3D = $Player
+
+var random_pos = Array(room_positions).pick_random()
+
+func _ready() -> void:
+	$DunMesh.mesh_created.connect(func(): spawn_at(random_pos))
+	full_regenerate()
+	
+
+func full_regenerate():
+	$TopCamera.make_current()
+	await generate(custom_seed)
+	
+	print("Preparing random cords")
+	random_pos = Array(room_positions).pick_random()
+	random_pos.y += 4
+	print(random_pos)
+	
+	$DunMesh.call_deferred("create_dungeon")
+	
+	#clear_centers()
+	#dungeon_layout_clear()
+
+func spawn_at(coords: Vector3):
+	#TODO убрать
+	spawned_count += 1
+	player.global_position = coords
+	player.update_ui(custom_seed)
+	print("Spawned at: ", coords)
+	player.switch_camera()
+	print("Spawned count: ", spawned_count)
 
 # Визуализированные границы пространства
 func visualize_border():
@@ -62,7 +94,6 @@ func visualize_centers():
 		new_marker.position = pos
 		spawned_centers.append(new_marker)
 		add_child(new_marker)
-		#print("Добавлен объект на позиции: ", pos)
 	centers_visible = true
 	print("Добавлено позиций: ", spawned_centers.size())
 
@@ -91,8 +122,7 @@ func generate(seed: String = ""):
 	elif custom_seed:
 		set_seed(custom_seed)
 	
-	print("custom seed: " + custom_seed)
-	print("seed in func: " + seed)
+	print("custom seed: " + custom_seed) #в игре приоритет отдается сиду, вызываемому в коде, а в редакторе из редактора
 	
 	#создание комнат
 	visualize_border()
@@ -153,6 +183,7 @@ func generate(seed: String = ""):
 	
 	print("Centers: ", room_positions)
 	visualize_centers()
+	print("Done generating layout\n")
 
 #TODO изучить подробнее
 func create_hallways(hallway_graph : AStar2D):
@@ -226,3 +257,13 @@ func make_room(recursion:int):
 	var avg_z : float = start_position.z + (float(height)/2)
 	var c_pos : Vector3 = Vector3(avg_x, 0, avg_z)
 	room_positions.append(c_pos)
+
+func _on_button_pressed() -> void:
+	full_regenerate()
+
+func _on_text_edit_text_changed() -> void:
+	if $TextEdit.text == "random":
+		custom_seed = ""
+	else:
+		custom_seed = $TextEdit.text
+	print("button text: ", $TextEdit.text)

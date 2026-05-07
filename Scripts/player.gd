@@ -1,6 +1,7 @@
 extends CharacterBody3D
 
 @onready var head: Node3D = $head
+@onready var debug_ui: Control = $debug_UI
 
 var current_speed = 5.0
 var direction = Vector3.ZERO
@@ -9,8 +10,22 @@ const lerp_speed = 10.0
 const speed_cap = 5.0
 const mouse_sensivity = 0.1
 
+var current_seed: String = "" 
+
 func _ready():
 	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
+	update_ui(current_seed)
+	print("Cur_seed ", current_seed)
+
+func set_seed(seed_value: String):
+	current_seed = seed_value
+
+func update_ui(seed:String = ""):
+	print("updated_ui: ", seed)
+	$debug_UI.update_all(seed)
+
+func switch_camera():
+	$head/Camera.make_current()
 
 func _input(event):
 	if event is InputEventMouseMotion:
@@ -31,5 +46,4 @@ func _physics_process(delta: float) -> void:
 	else:
 		velocity.x = move_toward(velocity.x, 0, current_speed)
 		velocity.z = move_toward(velocity.z, 0, current_speed)
-
 	move_and_slide()
