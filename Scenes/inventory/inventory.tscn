@@ -1,0 +1,17 @@
+[gd_scene format=3 uid="uid://3huulix5sawe"]
+
+[ext_resource type="Script" uid="uid://c6i6sbee3r4gt" path="res://Scripts/Inventory/inventory.gd" id="1_6b3in"]
+
+[node name="PanelContainer" type="PanelContainer" unique_id=1331575435]
+offset_right = 64.0
+offset_bottom = 64.0
+offset_transform_enabled = true
+script = ExtResource("1_6b3in")
+
+[node name="MarginContainer" type="MarginContainer" parent="." unique_id=502555381]
+layout_mode = 2
+
+[node name="GridContainer" type="GridContainer" parent="MarginContainer" unique_id=1116828937]
+custom_minimum_size = Vector2(64, 64)
+layout_mode = 2
+columns = 6

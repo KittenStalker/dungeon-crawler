@@ -1,0 +1,37 @@
+[gd_scene format=3 uid="uid://dsc4spirm1bwn"]
+
+[ext_resource type="Script" uid="uid://b43b73jlp1tty" path="res://Scripts/Inventory/slot.gd" id="1_i5yq4"]
+
+[node name="Slot" type="PanelContainer" unique_id=38170615]
+custom_minimum_size = Vector2(64, 64)
+propagate_maximum_size = false
+anchors_preset = -1
+anchor_right = 0.055555556
+anchor_bottom = 0.09876543
+size_flags_vertical = 3
+script = ExtResource("1_i5yq4")
+metadata/_edit_use_anchors_ = true
+
+[node name="MarginContainer" type="MarginContainer" parent="." unique_id=908028402]
+layout_mode = 2
+theme_override_constants/margin_left = 4
+theme_override_constants/margin_top = 4
+theme_override_constants/margin_right = 4
+theme_override_constants/margin_bottom = 4
+
+[node name="TextureRect" type="TextureRect" parent="MarginContainer" unique_id=1937552495]
+layout_mode = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="QuantityLabel" type="Label" parent="." unique_id=1886762684]
+visible = false
+layout_mode = 2
+size_flags_horizontal = 8
+size_flags_vertical = 8
+theme_override_constants/outline_size = 3
+text = "x99"
+
+[connection signal="gui_input" from="." to="." method="_on_gui_input"]
+[connection signal="mouse_entered" from="." to="." method="_on_mouse_entered"]
+[connection signal="mouse_exited" from="." to="." method="_on_mouse_exited"]

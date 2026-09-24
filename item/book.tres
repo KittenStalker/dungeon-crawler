@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="ItemData" format=3 uid="uid://400jf1hetj8"]
+
+[ext_resource type="Script" uid="uid://dtrnngd72ylna" path="res://Scripts/Inventory/item_data.gd" id="1_4noqm"]
+[ext_resource type="Texture2D" uid="uid://oq1hocfcnakk" path="res://Textures/#1 - Transparent Icons.png" id="2_h88fo"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_corqd"]
+atlas = ExtResource("2_h88fo")
+region = Rect2(0, 416, 32, 32)
+
+[resource]
+script = ExtResource("1_4noqm")
+name = "Book"
+descrition = "Testste"
+texture = SubResource("AtlasTexture_corqd")
+metadata/_custom_type_script = "uid://dtrnngd72ylna"

@@ -1,16 +1,19 @@
 extends CharacterBody3D
 
+@export var inventory_data: InventoryData
+
 @onready var head: Node3D = $head
 @onready var debug_ui: Control = $debug_UI
 
 var current_speed = 5.0
 var direction = Vector3.ZERO
+var current_seed: String = "" 
 
 const lerp_speed = 10.0
 const speed_cap = 5.0
 const mouse_sensivity = 0.1
 
-var current_seed: String = "" 
+signal toggle_inventory()
 
 func _ready():
 	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
@@ -24,7 +27,7 @@ func update_ui(seed:String = ""):
 	print("updated_ui: ", seed)
 	$debug_UI.update_all(seed)
 
-func switch_camera():
+func set_camera():
 	$head/Camera.make_current()
 
 func _input(event):
@@ -32,6 +35,21 @@ func _input(event):
 		rotate_y(-deg_to_rad(event.relative.x * mouse_sensivity))
 		head.rotate_x(-deg_to_rad(event.relative.y * mouse_sensivity))
 		head.rotation.x = clamp(head.rotation.x, deg_to_rad(-89), deg_to_rad(89))
+		
+	if event is InputEventKey and event.keycode == KEY_Q and event.pressed:
+		if $head/Camera.is_current():
+			$"../TopCamera".make_current()
+		else:
+			set_camera()
+	
+	if event is InputEventKey and event.keycode == KEY_E and event.pressed:
+		if Input.get_mouse_mode() == Input.MOUSE_MODE_CAPTURED:
+			Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
+		else:
+			Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
+	
+	if event.is_action_pressed("inventory"):
+		toggle_inventory.emit()
 
 func _physics_process(delta: float) -> void:
 	# Add the gravity.

@@ -3,13 +3,6 @@ extends Control
 @onready var seed_number: Label = $Seed_number
 @onready var regen_button: Button = $Regen_button
 
-func _input(event):
-	if event is InputEventKey and event.keycode == KEY_E and event.pressed:
-		if Input.get_mouse_mode() == Input.MOUSE_MODE_CAPTURED:
-			Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
-		else:
-			Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
-
 func _ready() -> void:
 	pass
 

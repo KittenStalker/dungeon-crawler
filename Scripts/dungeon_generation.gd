@@ -1,9 +1,16 @@
 @tool 
 extends Node3D
+
 @onready var grid_map: GridMap = $GridMap
+@onready var inventory_interface: Control = $CanvasLayer/InventoryInterface
+@onready var player: CharacterBody3D = $Player
+
+const marker = preload("res://Asset/node_3d.tscn") #center TODO rework
 
 var spawned_count : int = 0
 var centers_visible : bool = false
+
+var rng = RandomNumberGenerator.new()
 
 @export_tool_button("Generate") var generate_dungeon: Callable = func():
 	if Engine.is_editor_hint():
@@ -13,7 +20,7 @@ var centers_visible : bool = false
 	if Engine.is_editor_hint():
 			dungeon_layout_clear()
 
-@export_range(0,1) var survival_chance : float = 0.25
+@export_range(0,1) var survival_chance : float = 1.0
 
 @export_tool_button("Toggle centers") var toggle_centers: Callable = func():
 	if centers_visible:
@@ -23,59 +30,58 @@ var centers_visible : bool = false
 		visualize_centers()
 		print("shown")
 
-@export var border_size : int = 20 : set = set_border_size
+@export var border_size : int = 150 : set = set_border_size
 func set_border_size(val:int)->void:
 	border_size = val
 	if Engine.is_editor_hint():
 		visualize_border()
 
-@export var min_room_size : int = 2
-@export var max_room_size : int = 4
-@export var room_number : int = 4
-@export var room_margin : int = 1
-@export var max_recursion : int = 5
+@export var min_room_size : int = 6
+@export var max_room_size : int = 12
+@export var room_number : int = 30
+@export var room_margin : int = 3
+@export var max_recursion : int = 8
 @export_multiline var custom_seed : String = "" : set = set_seed
 func set_seed(val:String)->void:
 	custom_seed = val
-	seed(val.hash())
+	if val.is_empty():
+		rng.randomize()
+	else:
+		rng.seed = hash(val)
 
 @export var room_tiles : Array[PackedVector3Array] = []
 @export var room_positions : PackedVector3Array = []
 @export var spawned_centers : Array = []
-
-const marker = preload("res://Asset/node_3d.tscn") #center TODO rework
-#var player_resource = preload("res://Asset/player.tscn")
-
-@onready var player: CharacterBody3D = $Player
-
-var random_pos = Array(room_positions).pick_random()
-
 func _ready() -> void:
-	$DunMesh.mesh_created.connect(func(): spawn_at(random_pos))
+
+
+	$DunMesh.mesh_created.connect(func(): spawn_random())
 	full_regenerate()
 	
+	player.toggle_inventory.connect(toggle_inventory_interface)
+	inventory_interface.set_player_inventory_data(player.inventory_data)
 
 func full_regenerate():
 	$TopCamera.make_current()
 	await generate(custom_seed)
 	
-	print("Preparing random cords")
-	random_pos = Array(room_positions).pick_random()
-	random_pos.y += 4
-	print(random_pos)
-	
 	$DunMesh.call_deferred("create_dungeon")
-	
-	#clear_centers()
-	#dungeon_layout_clear()
+
+func spawn_random():
+	print("Preparing random cords")
+	Array(room_positions).shuffle()
+	var random_pos = Array(room_positions).pick_random()
+	random_pos.y += 2
+	print(random_pos)
+	spawn_at(random_pos)
+	return random_pos
 
 func spawn_at(coords: Vector3):
-	#TODO убрать
 	spawned_count += 1
 	player.global_position = coords
 	player.update_ui(custom_seed)
 	print("Spawned at: ", coords)
-	player.switch_camera()
+	player.set_camera()
 	print("Spawned count: ", spawned_count)
 
 # Визуализированные границы пространства
@@ -115,25 +121,30 @@ func dungeon_layout_clear():
 # Основная функция генерации комнат
 func generate(seed: String = ""):
 	dungeon_layout_clear()
+	clear_graph()
 	print("generating...")
 	
 	if seed:
-		set_seed(seed)
-	elif custom_seed:
-		set_seed(custom_seed)
-	
+		custom_seed = seed
 	print("custom seed: " + custom_seed) #в игре приоритет отдается сиду, вызываемому в коде, а в редакторе из редактора
 	
 	#создание комнат
 	visualize_border()
 	for i in room_number:
 		make_room(max_recursion)
+	#создание проходов
+	delunay_gen()
 	
+	
+	print("Centers: ", room_positions)
+	visualize_centers()
+	print("Done generating layout\n")
+
+func delunay_gen():
 	var room_pos_V2 : PackedVector2Array = []
 	var del_graph : AStar2D = AStar2D.new()
 	var mst_graph : AStar2D = AStar2D.new()
-	
-	#триангуляция делоне, но я не понимаю
+	#триангуляция делоне
 	for p in room_positions:
 		room_pos_V2.append(Vector2(p.x,p.z))
 		del_graph.add_point(del_graph.get_available_point_id(),Vector2(p.x,p.z))
@@ -150,7 +161,7 @@ func generate(seed: String = ""):
 		del_graph.connect_points(p3,p1)
 	
 	var visited_points : PackedInt32Array = []
-	visited_points.append(randi() % room_positions.size())
+	visited_points.append(rng.randi() % room_positions.size())
 	while visited_points.size() != mst_graph.get_point_count():
 		var possible_connections : Array[PackedInt32Array] = []
 		for vp in visited_points:
@@ -175,17 +186,12 @@ func generate(seed: String = ""):
 	for p in del_graph.get_point_ids():
 		for c in del_graph.get_point_connections(p):
 			if c>p:
-				var kill : float = randf()
+				var kill : float = rng.randf()
 				if survival_chance > kill:
 					hallway_graph.connect_points(p,c)
 	create_hallways(hallway_graph)
-	
-	
-	print("Centers: ", room_positions)
-	visualize_centers()
-	print("Done generating layout\n")
+	draw_graph_3d(hallway_graph, room_positions)
 
-#TODO изучить подробнее
 func create_hallways(hallway_graph : AStar2D):
 	var hallways : Array[PackedVector3Array] = []
 	for p in hallway_graph.get_point_ids():
@@ -226,17 +232,17 @@ func create_hallways(hallway_graph : AStar2D):
 			if grid_map.get_cell_item(pos) <0:
 				grid_map.set_cell_item(pos,1)
 
+
 func make_room(recursion:int):
 	if !recursion > 0:
 		return
 	
-	#TODO: Изменить на заранее заготовленные позже
-	var width : int = randi_range(min_room_size, max_room_size)
-	var height : int = randi_range(min_room_size, max_room_size)
+	var width : int = rng.randi_range(min_room_size, max_room_size)
+	var height : int = rng.randi_range(min_room_size, max_room_size)
 	
 	var start_position : Vector3i
-	start_position.x = randi() % (border_size - width + 1)
-	start_position.z = randi() % (border_size - height + 1)
+	start_position.x = rng.randi() % (border_size - width + 1)
+	start_position.z = rng.randi() % (border_size - height + 1)
 	
 	#проверка на наслоение комнат
 	for r in range(-room_margin, height+room_margin):
@@ -267,3 +273,60 @@ func _on_text_edit_text_changed() -> void:
 	else:
 		custom_seed = $TextEdit.text
 	print("button text: ", $TextEdit.text)
+
+var graph_mesh_instance: MeshInstance3D = null
+
+func draw_graph_3d(hallway_graph: AStar2D, room_positions: Array):
+	# Очищаем старый
+	clear_graph()
+	
+	var vertices = PackedVector3Array()
+	
+	for p in hallway_graph.get_point_ids():
+		var from_pos = room_positions[p]
+		for c in hallway_graph.get_point_connections(p):
+			if c > p:
+				var to_pos = room_positions[c]
+				vertices.append(Vector3(from_pos.x, from_pos.y + 0.1, from_pos.z))
+				vertices.append(Vector3(to_pos.x, to_pos.y + 0.1, to_pos.z))
+	
+	if vertices.is_empty():
+		return
+	
+	# Создаем ArrayMesh
+	var array_mesh = ArrayMesh.new()
+	var arrays = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	
+	# Добавляем индексы
+	var indices = PackedInt32Array()
+	for i in range(vertices.size()):
+		indices.append(i)
+	arrays[Mesh.ARRAY_INDEX] = indices
+	
+	array_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_LINES, arrays)
+	
+	# Создаем MeshInstance3D
+	graph_mesh_instance = MeshInstance3D.new()
+	graph_mesh_instance.mesh = array_mesh
+	
+	var material = StandardMaterial3D.new()
+	material.albedo_color = Color.RED
+	material.shading_mode = StandardMaterial3D.SHADING_MODE_UNSHADED
+	graph_mesh_instance.material_override = material
+	
+	add_child(graph_mesh_instance)
+
+func clear_graph():
+	if graph_mesh_instance:
+		graph_mesh_instance.queue_free()
+		graph_mesh_instance = null
+
+########## INVENTORY
+func toggle_inventory_interface() -> void:
+	inventory_interface.visible = not inventory_interface.visible
+	if inventory_interface.visible:
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	else:
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
