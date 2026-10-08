@@ -5,7 +5,8 @@ extends Node3D
 @onready var inventory_interface: Control = $CanvasLayer/InventoryInterface
 @onready var player: CharacterBody3D = $Player
 
-const marker = preload("res://Asset/node_3d.tscn") #center TODO rework
+const marker = preload("res://Asset/node_3d.tscn") #center TODO rework 
+
 
 var spawned_count : int = 0
 var centers_visible : bool = false
@@ -52,17 +53,25 @@ func set_seed(val:String)->void:
 @export var room_tiles : Array[PackedVector3Array] = []
 @export var room_positions : PackedVector3Array = []
 @export var spawned_centers : Array = []
+
 func _ready() -> void:
-
-
-	$DunMesh.mesh_created.connect(func(): spawn_random())
+	$DunMesh.mesh_created.connect(_on_mesh_created)
 	full_regenerate()
 	
 	player.toggle_inventory.connect(toggle_inventory_interface)
 	inventory_interface.set_player_inventory_data(player.inventory_data)
 
+func _on_mesh_created() -> void:
+	if Engine.is_editor_hint():
+		return
+	# ждём, пока физика зарегистрирует коллайдеры свежесозданных ячеек
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	spawn_random()
+
 func full_regenerate():
 	$TopCamera.make_current()
+	#spawn_at(start_pos)
 	await generate(custom_seed)
 	
 	$DunMesh.call_deferred("create_dungeon")
@@ -223,14 +232,18 @@ func create_hallways(hallway_graph : AStar2D):
 	for t in grid_map.get_used_cells_by_item(0):
 		astar.set_point_solid(Vector2i(t.x,t.z))
 	
+	const WIDEN := [Vector3i(0,0,0), Vector3i(1,0,0), Vector3i(0,0,1), Vector3i(1,0,1)]
+
 	for h in hallways:
 		var pos_from : Vector2i = Vector2i(h[0].x, h[0].z)
 		var pos_to : Vector2i = Vector2i(h[1].x, h[1].z)
-		var hall : PackedVector2Array = astar.get_point_path(pos_from,pos_to)
+		var hall : PackedVector2Array = astar.get_point_path(pos_from, pos_to)
 		for t in hall:
-			var pos : Vector3i = Vector3i(t.x,0,t.y)
-			if grid_map.get_cell_item(pos) <0:
-				grid_map.set_cell_item(pos,1)
+			var base : Vector3i = Vector3i(t.x, 0, t.y)
+			for off in WIDEN:
+				var pos : Vector3i = base + off
+				if grid_map.get_cell_item(pos) < 0:
+					grid_map.set_cell_item(pos, 1)
 
 
 func make_room(recursion:int):

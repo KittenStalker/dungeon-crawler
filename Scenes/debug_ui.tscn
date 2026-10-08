@@ -24,3 +24,12 @@ offset_right = 364.0
 offset_bottom = 79.0
 text = "Seed_not_set"
 label_settings = SubResource("LabelSettings_r5egx")
+
+[node name="Fps_label" type="Label" parent="." unique_id=1450087663]
+unique_name_in_owner = true
+layout_mode = 0
+offset_top = 577.0
+offset_right = 364.0
+offset_bottom = 656.0
+text = "Seed_not_set"
+label_settings = SubResource("LabelSettings_r5egx")
