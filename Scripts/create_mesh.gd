@@ -53,6 +53,25 @@ func handle_22(cell:Node3D, dir:String):
 	cell.call("remove_" + dir + "_wall")
 	cell.call("remove_" + dir + "_door")
 
+# Возвращает true, когда проём нужно открыть полностью (без арки и колонны):
+#  - тайл выходит в коридор (тип 1) двумя и более сторонами => угол/перекрёсток;
+#  - рядом вдоль стены стоит ещё один дверной тайл, тоже смотрящий в коридор
+#    в ту же сторону => проём шире одной клетки.
+func _should_open_fully(cell : Vector3i, dir : Vector3i) -> bool:
+	var corridor_sides : int = 0
+	for d in directions.values():
+		if grid_map.get_cell_item(cell + d) == 1:
+			corridor_sides += 1
+	if corridor_sides >= 2:
+		return true
+	# перпендикуляр к dir в плоскости XZ
+	var perp : Vector3i = Vector3i(dir.z, 0, dir.x)
+	for s in [perp, -perp]:
+		var side : Vector3i = cell + s
+		if grid_map.get_cell_item(side) == 2 and grid_map.get_cell_item(side + dir) == 1:
+			return true
+	return false
+
 func clear_mesh():
 	for c in get_children():
 		remove_child(c)
@@ -79,7 +98,11 @@ func create_dungeon():
 					handle_none(dun_cell, directions.keys()[i])
 				else:
 					var key : String = str(cell_index) + str(cell_n_index)
-					call("handle_" + key, dun_cell, directions.keys()[i])
+					if key == "21" and _should_open_fully(cell, directions.values()[i]):
+						handle_22(dun_cell, directions.keys()[i])
+					else:
+						# убираем две арки, оставляем пустое пространство вместо двух арок рядом
+						call("handle_" + key, dun_cell, directions.keys()[i]) 
 		if t%step == step-1 : await get_tree().create_timer(intervallo).timeout
 	print("Done creating meshes\n")
 	mesh_created.emit()

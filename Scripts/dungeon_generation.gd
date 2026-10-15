@@ -42,6 +42,18 @@ func set_border_size(val:int)->void:
 @export var room_number : int = 30
 @export var room_margin : int = 3
 @export var max_recursion : int = 8
+
+# Переключатель между старым коридором на A* (лесенка/«диагональ»)
+# и новым прямым Г-образным коридором.
+@export var use_straight_hallways : bool = true
+
+@export var make_dead_ends : bool = true
+@export_range(0,1) var dead_end_chance : float = 0.12   # шанс отростка на тайл коридора
+@export var max_dead_ends : int = 12                     # ограничение кол-ва отростков
+@export var dead_end_min_len : int = 3                   # мин. длина отростка (тайлов)
+@export var dead_end_max_len : int = 7                   # макс. длина отростка
+@export var dead_end_room_size : int = 3                 # сторона комнатки-тупика
+
 @export_multiline var custom_seed : String = "" : set = set_seed
 func set_seed(val:String)->void:
 	custom_seed = val
@@ -101,7 +113,6 @@ func visualize_border():
 		grid_map.set_cell_item(Vector3i(border_size,0,i), 3)
 		grid_map.set_cell_item(Vector3i(-1,0,i), 3)
 
-#может быть не удалять а сделать отдельный массив (если проблема в производительности)
 func visualize_centers():
 	for pos in room_positions:
 		pos.y += 4
@@ -143,8 +154,10 @@ func generate(seed: String = ""):
 		make_room(max_recursion)
 	#создание проходов
 	delunay_gen()
-	
-	
+
+	if make_dead_ends:
+		add_dead_ends()
+
 	print("Centers: ", room_positions)
 	visualize_centers()
 	print("Done generating layout\n")
@@ -198,7 +211,10 @@ func delunay_gen():
 				var kill : float = rng.randf()
 				if survival_chance > kill:
 					hallway_graph.connect_points(p,c)
-	create_hallways(hallway_graph)
+	if use_straight_hallways:
+		create_hallways_straight(hallway_graph)
+	else:
+		create_hallways(hallway_graph)
 	draw_graph_3d(hallway_graph, room_positions)
 
 func create_hallways(hallway_graph : AStar2D):
@@ -245,6 +261,133 @@ func create_hallways(hallway_graph : AStar2D):
 				if grid_map.get_cell_item(pos) < 0:
 					grid_map.set_cell_item(pos, 1)
 
+# Прямые Г-образные коридоры (без лесенки/«диагонали»)
+# Коридор между двумя комнатами состоит максимум из двух прямых
+# отрезков с одним поворотом на 90°. Каждый шаг строго по одной оси,
+# поэтому «диагональных» (лесеничных) проходов не возникает.
+const HALL_WIDEN := [Vector3i(0,0,0), Vector3i(1,0,0), Vector3i(0,0,1), Vector3i(1,0,1)]
+
+func create_hallways_straight(hallway_graph : AStar2D) -> void:
+	for p in hallway_graph.get_point_ids():
+		for c in hallway_graph.get_point_connections(p):
+			if c > p:
+				var room_from : PackedVector3Array = room_tiles[p]
+				var room_to : PackedVector3Array = room_tiles[c]
+				# выбираем тайлы комнат, ближайшие к центру соседней комнаты
+				var tile_from : Vector3 = room_from[0]
+				var tile_to : Vector3 = room_to[0]
+				for t in room_from:
+					if t.distance_squared_to(room_positions[c]) <\
+					tile_from.distance_squared_to(room_positions[c]):
+						tile_from = t
+				for t in room_to:
+					if t.distance_squared_to(room_positions[p]) <\
+					tile_to.distance_squared_to(room_positions[p]):
+						tile_to = t
+				# стыковочные тайлы (открывают стену комнаты, тип 2)
+				grid_map.set_cell_item(tile_from, 2)
+				grid_map.set_cell_item(tile_to, 2)
+				# точка поворота Г-образного коридора выбирается случайно:
+				# либо сначала по X, потом по Z, либо наоборот
+				var a : Vector3i = Vector3i(tile_from)
+				var b : Vector3i = Vector3i(tile_to)
+				var corner : Vector3i
+				if rng.randf() < 0.5:
+					corner = Vector3i(b.x, 0, a.z)
+				else:
+					corner = Vector3i(a.x, 0, b.z)
+				carve_straight_segment(a, corner)
+				carve_straight_segment(corner, b)
+
+# Прорезает один прямой отрезок коридора (строго по оси), ширина 2 тайла.
+# Клетки комнат (0) и стыки (2) не перезаписываются — только пустота.
+func carve_straight_segment(a : Vector3i, b : Vector3i) -> void:
+	var delta : Vector3i = b - a
+	var steps : int = maxi(absi(delta.x), absi(delta.z))
+	var dir : Vector3i = Vector3i(signi(delta.x), 0, signi(delta.z))
+	var cell : Vector3i = a
+	for i in range(steps + 1):
+		for off in HALL_WIDEN:
+			var pos : Vector3i = cell + off
+			if grid_map.get_cell_item(pos) < 0:
+				grid_map.set_cell_item(pos, 1)
+		cell += dir
+
+# Случайные отростки-тупики с маленькими комнатами
+# Проходит по тайлам коридоров и с шансом dead_end_chance пускает
+# перпендикулярный отросток в пустоту, который заканчивается
+# маленькой комнаткой. Всё строится тайлами типа 1, чтобы двери
+# (handle_11) гарантированно открывались.
+
+func add_dead_ends() -> void:
+	var corridor_cells : Array = Array(grid_map.get_used_cells_by_item(1))
+	corridor_cells.shuffle()
+	var dirs : Array[Vector3i] = [
+		Vector3i(1,0,0), Vector3i(-1,0,0),
+		Vector3i(0,0,1), Vector3i(0,0,-1)
+	]
+	var made : int = 0
+	for cell in corridor_cells:
+		if made >= max_dead_ends:
+			break
+		if rng.randf() > dead_end_chance:
+			continue
+		var dir : Vector3i = dirs[rng.randi() % dirs.size()]
+		var length : int = rng.randi_range(dead_end_min_len, dead_end_max_len)
+		# пробуем проложить отросток только в полностью пустые клетки
+		var path : Array[Vector3i] = []
+		var ok : bool = true
+		for i in range(1, length + 1):
+			var step_cell : Vector3i = cell + dir * i
+			if not _cell_is_free(step_cell):
+				ok = false
+				break
+			path.append(step_cell)
+		if not ok or path.is_empty():
+			continue
+		var end : Vector3i = path[path.size() - 1]
+		# проверяем, что комнатка-тупик помещается в пустоту
+		if not _dead_end_room_fits(end, dir):
+			continue
+		# всё свободно — прорезаем отросток и комнатку
+		for stub in path:
+			grid_map.set_cell_item(stub, 1)
+		_carve_dead_end_room(end, dir)
+		made += 1
+	print("Dead ends created: ", made)
+
+# Перпендикуляр к направлению отростка (для раскладки комнатки).
+func _perp(dir : Vector3i) -> Vector3i:
+	if dir.x != 0:
+		return Vector3i(0,0,1)
+	return Vector3i(1,0,0)
+
+# Клетка в пределах границы и пустая.
+func _cell_is_free(p : Vector3i) -> bool:
+	if p.x < 0 or p.x >= border_size or p.z < 0 or p.z >= border_size:
+		return false
+	return grid_map.get_cell_item(p) < 0
+
+# Проверка, что квадрат комнатки-тупика целиком помещается в пустоту.
+func _dead_end_room_fits(end : Vector3i, dir : Vector3i) -> bool:
+	var perp : Vector3i = _perp(dir)
+	var half : int = dead_end_room_size / 2
+	for a in range(dead_end_room_size):
+		for b in range(dead_end_room_size):
+			var pos : Vector3i = end + dir * a + perp * (b - half)
+			if not _cell_is_free(pos):
+				return false
+	return true
+
+# Прорезает квадратную комнатку-тупик тайлами типа 1 (открытые двери).
+func _carve_dead_end_room(end : Vector3i, dir : Vector3i) -> void:
+	var perp : Vector3i = _perp(dir)
+	var half : int = dead_end_room_size / 2
+	for a in range(dead_end_room_size):
+		for b in range(dead_end_room_size):
+			var pos : Vector3i = end + dir * a + perp * (b - half)
+			if grid_map.get_cell_item(pos) < 0:
+				grid_map.set_cell_item(pos, 1)
 
 func make_room(recursion:int):
 	if !recursion > 0:
