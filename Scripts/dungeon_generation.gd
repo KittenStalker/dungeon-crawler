@@ -284,13 +284,33 @@ func create_hallways_straight(hallway_graph : AStar2D) -> void:
 					if t.distance_squared_to(room_positions[p]) <\
 					tile_to.distance_squared_to(room_positions[p]):
 						tile_to = t
-				# стыковочные тайлы (открывают стену комнаты, тип 2)
-				grid_map.set_cell_item(tile_from, 2)
-				grid_map.set_cell_item(tile_to, 2)
-				# точка поворота Г-образного коридора выбирается случайно:
-				# либо сначала по X, потом по Z, либо наоборот
-				var a : Vector3i = Vector3i(tile_from)
-				var b : Vector3i = Vector3i(tile_to)
+				# стыковочные тайлы комнат (открывают стену комнаты, тип 2)
+				var a_door : Vector3i = Vector3i(tile_from)
+				var b_door : Vector3i = Vector3i(tile_to)
+				grid_map.set_cell_item(a_door, 2)
+				grid_map.set_cell_item(b_door, 2)
+				# === СТАРЫЙ КОД: резали прямо от тайла комнаты — коридор мог идти
+				# вдоль/через комнату и не стыковаться с дверью (проход закрыт стеной) ===
+				#var a : Vector3i = a_door
+				#var b : Vector3i = b_door
+				#var corner : Vector3i
+				#if rng.randf() < 0.5:
+				#	corner = Vector3i(b.x, 0, a.z)
+				#else:
+				#	corner = Vector3i(a.x, 0, b.z)
+				#carve_straight_segment(a, corner)
+				#carve_straight_segment(corner, b)
+				# === НОВЫЙ КОД: режем коридор между ВНЕШНИМИ якорями дверей ===
+				# Якорь — ближайшая к соседней комнате пустая клетка-сосед двери
+				# (выход наружу). Дверь гарантированно примыкает к коридору, а сам
+				# коридор не лезет внутрь комнаты.
+				var a : Vector3i = _exit_anchor(a_door, room_positions[c])
+				var b : Vector3i = _exit_anchor(b_door, room_positions[p])
+				# сам якорь делаем коридором (тип 1), чтобы дверь к нему примкнула
+				if grid_map.get_cell_item(a) < 0:
+					grid_map.set_cell_item(a, 1)
+				if grid_map.get_cell_item(b) < 0:
+					grid_map.set_cell_item(b, 1)
 				var corner : Vector3i
 				if rng.randf() < 0.5:
 					corner = Vector3i(b.x, 0, a.z)
@@ -298,6 +318,7 @@ func create_hallways_straight(hallway_graph : AStar2D) -> void:
 					corner = Vector3i(a.x, 0, b.z)
 				carve_straight_segment(a, corner)
 				carve_straight_segment(corner, b)
+				# === КОНЕЦ НОВОГО КОДА ===
 
 # Прорезает один прямой отрезок коридора (строго по оси), ширина 2 тайла.
 # Клетки комнат (0) и стыки (2) не перезаписываются — только пустота.
@@ -312,6 +333,24 @@ func carve_straight_segment(a : Vector3i, b : Vector3i) -> void:
 			if grid_map.get_cell_item(pos) < 0:
 				grid_map.set_cell_item(pos, 1)
 		cell += dir
+
+# === НОВЫЙ КОД: внешний якорь двери ===
+# Ближайшая к target (центру соседней комнаты) ПУСТАЯ клетка-сосед двери —
+# то есть выход из комнаты наружу. Коридор режется от этой точки, поэтому
+# дверь всегда ортогонально примыкает к коридору, а сам коридор не идёт
+# внутрь комнаты. Если пустых соседей нет (дверь заперта) — вернём саму дверь.
+func _exit_anchor(door : Vector3i, target : Vector3) -> Vector3i:
+	var best : Vector3i = door
+	var best_d : float = INF
+	for d in [Vector3i(1,0,0), Vector3i(-1,0,0), Vector3i(0,0,1), Vector3i(0,0,-1)]:
+		var n : Vector3i = door + d
+		if grid_map.get_cell_item(n) < 0:
+			var dist : float = Vector3(n).distance_squared_to(target)
+			if dist < best_d:
+				best_d = dist
+				best = n
+	return best
+# === КОНЕЦ НОВОГО КОДА ===
 
 # Случайные отростки-тупики с маленькими комнатами
 # Проходит по тайлам коридоров и с шансом dead_end_chance пускает
